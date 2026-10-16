@@ -7,6 +7,8 @@ package command
 
 import (
 	"context"
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -2145,4 +2147,37 @@ func testMetaBackend(t *testing.T) *Meta {
 	})
 
 	return &m
+}
+
+func TestMetaBackend_selectWorkspace_contextCanceled(t *testing.T) {
+	td := t.TempDir()
+	t.Chdir(td)
+
+	m := testMetaBackend(t)
+
+	b := &backendInit.MockBackend{
+		WorkspacesFn: func() ([]string, error) {
+			return []string{"workspace-a", "workspace-b"}, nil
+		},
+	}
+
+	r, w := io.Pipe()
+	defaultInputReader = r
+	defaultInputWriter = io.Discard
+	t.Cleanup(func() {
+		defaultInputReader = nil
+		defaultInputWriter = nil
+		_ = w.Close()
+	})
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	err := m.selectWorkspace(ctx, b)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got: %s", err)
+	}
 }

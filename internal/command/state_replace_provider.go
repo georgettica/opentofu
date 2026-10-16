@@ -47,6 +47,8 @@ func (c StateReplaceProviderCommand) Execute(args *arguments.StateReplaceProvide
 	var diags tfdiags.Diagnostics
 
 	ctx := c.CommandContext()
+	stopCtx, cancel := c.InterruptibleContext(ctx)
+	defer cancel()
 
 	if diags := c.Meta.checkRequiredVersion(ctx); diags != nil {
 		view.Diagnostics(diags)
@@ -147,7 +149,7 @@ func (c StateReplaceProviderCommand) Execute(args *arguments.StateReplaceProvide
 
 	// Confirm
 	if !args.AutoApprove {
-		v, err := c.UIInput().Input(ctx, &tofu.InputOpts{
+		v, err := c.UIInput().Input(stopCtx, &tofu.InputOpts{
 			Id:          "confirm",
 			Query:       "\nDo you want to make these changes?",
 			Description: "Only 'yes' will be accepted to continue.",

@@ -50,6 +50,9 @@ func (c UnlockCommand) Execute(args *arguments.Unlock, view views.Unlock) int {
 	ctx, span := tracing.Tracer().Start(ctx, "Unlock")
 	defer span.End()
 
+	stopCtx, cancel := c.InterruptibleContext(ctx)
+	defer cancel()
+
 	lockID := args.LockID
 
 	// This gets the current directory as full path.
@@ -117,7 +120,7 @@ func (c UnlockCommand) Execute(args *arguments.Unlock, view views.Unlock) int {
 			"This will allow local OpenTofu commands to modify this state, even though it\n" +
 			"may still be in use. Only 'yes' will be accepted to confirm."
 
-		v, err := c.UIInput().Input(context.Background(), &tofu.InputOpts{
+		v, err := c.UIInput().Input(stopCtx, &tofu.InputOpts{
 			Id:          "force-unlock",
 			Query:       "Do you really want to force-unlock?",
 			Description: desc,
