@@ -6,8 +6,11 @@
 package command
 
 import (
+	"io"
 	"os"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/opentofu/opentofu/internal/backend/remote-state/inmem"
 	"github.com/opentofu/opentofu/internal/command/arguments"
@@ -124,3 +127,60 @@ func TestUnlock_inmemBackend(t *testing.T) {
 		t.Fatalf("bad: %d\n%s", code, unlockOutput.All())
 	}
 }
+
+func TestUnlock_shutdownDuringConfirm(t *testing.T) {
+	td := t.TempDir()
+	testCopyDir(t, testFixturePath("backend-inmem-locked"), td)
+	t.Chdir(td)
+	defer inmem.Reset()
+
+	// init backend
+	initView, initDone := testView(t)
+	meta := Meta{
+		WorkingDir: workdir.NewDir("."),
+		View:       initView,
+	}
+	code := RunCommander(t, InitCommander(), meta, nil)
+	initOutput := initDone(t)
+	if code != 0 {
+		t.Fatalf("bad: %d\n%s", code, initOutput.Stderr())
+	}
+
+	unlockView, unlockDone := testView(t)
+
+	r, w := io.Pipe()
+	defaultInputReader = r
+	defaultInputWriter = io.Discard
+	t.Cleanup(func() {
+		defaultInputReader = nil
+		defaultInputWriter = nil
+		_ = w.Close()
+	})
+
+	shutdownCh := make(chan struct{})
+	meta = Meta{
+		WorkingDir: workdir.NewDir("."),
+		View:       unlockView,
+		ShutdownCh: shutdownCh,
+	}
+
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		close(shutdownCh)
+	}()
+
+	// Run without -force to prompt for confirmation
+	args := []string{
+		"2b6a6738-5dd5-50d6-c0ae-f6352977666b",
+	}
+	code = RunCommander(t, UnlockCommander(), meta, args)
+	unlockOutput := unlockDone(t)
+	if code != 1 {
+		t.Fatalf("expected code 1, got %d\n%s", code, unlockOutput.All())
+	}
+
+	if !strings.Contains(unlockOutput.All(), "Error asking for confirmation") {
+		t.Fatalf("expected confirmation error in output, got:\n%s", unlockOutput.All())
+	}
+}
+

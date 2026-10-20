@@ -53,7 +53,7 @@ func TestBackendMigrate_promptMultiStatePattern(t *testing.T) {
 		}
 
 		sourceType := "cloud"
-		_, err := m.promptMultiStateMigrationPattern(sourceType)
+		_, err := m.promptMultiStateMigrationPattern(t.Context(), sourceType)
 		if tc.expectedErr == "" && err != nil {
 			t.Fatalf("expected error to be nil, but was %s", err.Error())
 		}
